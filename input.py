@@ -10,6 +10,8 @@ import shutil
 import string
 import typing
 import xlsxwriter
+from statistics import mean
+from statistics import stdev
 
 
 # === CLASSES ==================================================================
@@ -18,22 +20,39 @@ class gyro:
     
     class Row(enum.Enum):
         Header = 0
-        Data = 1
+        Ave = 1
+        Stdev = 2
+        Data = 3
         
     class Col(enum.Enum):
-        X = 0
-        Y = 1
-        Z = 2
+        Label = 0
+        X = 1
+        Y = 2
+        Z = 3
+        
+    class SummaryRow(enum.Enum):
+        Header = 0
+        Data = 1
+        
+    class SummaryCol(enum.Enum):
+        Name = 0
+        AveX = 1
+        AveY = 2
+        AveZ = 3
+        StdevX = 4
+        StdevY = 5
+        StdevZ = 6
         
     __COL_PER = Col.Z.value + 1
     
     def __init__(self):
         __FILE_NAME: str = 'gyro'
         __EXTENSION: str = '.xlsx'
-        __DATA_SHEET: str = 'data'
+        __SUMMARY_SHEET: str = 'summary'
         
         self.wb: xlsxwriter.Workbook = xlsxwriter.Workbook(__FILE_NAME + __EXTENSION)
-        self.dataSheet: xlsxwriter.Workbook.worksheet_class = self.wb.add_worksheet(__DATA_SHEET)
+        self.summary: xlsxwriter.Workbook.worksheet_class = self.wb.add_worksheet(__SUMMARY_SHEET)
+        #self.sheets: typing.List[xlsxwriter.Workbook.worksheet_class] = []
         self.count: int = 0
         
     def __parseLine(self, line: str) -> typing.List[int]:
@@ -62,6 +81,14 @@ class gyro:
         __FILE_SEARCH_PATTERN: str = '*.log'
         __FILE_REPLACE_PATTERN: str = __FILE_SEARCH_PATTERN.replace('*', '')
         
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.Name.value, "NAME")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.AveX.value, "X[AVE]")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.AveY.value, "Y[AVE]")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.AveZ.value, "Z[AVE]")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.StdevX.value, "X[STDEV]")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.StdevY.value, "Y[STDEV]")
+        self.summary.write(self.SummaryRow.Header.value, self.SummaryCol.StdevZ.value, "Z[STDEV]")
+        
         for fileName in glob.glob(__FILE_SEARCH_PATTERN):
             print('processing {0}...'.format(fileName))
             name: str = fileName.replace(__FILE_REPLACE_PATTERN, '')
@@ -70,17 +97,52 @@ class gyro:
                 readLines = file.readlines()
             file.close()
             row = self.Row.Header.value
-            colOffset = self.count * self.__COL_PER
-            self.dataSheet.write(row, colOffset, name)
+            sheet: xlsxwriter.Workbook.worksheet_class = self.wb._add_sheet(name)
+            sheet.write(row, self.Col.X.value, 'X')
+            sheet.write(row, self.Col.Y.value, 'Y')
+            sheet.write(row, self.Col.Z.value, 'Z')
             row += 1
+            sheet.write(row, self.Col.Label.value, 'AVE')
+            row += 1
+            sheet.write(row, self.Col.Label.value, 'STDEV')
+            row += 1
+            xs: typing.List[float] = []
+            ys: typing.List[float] = []
+            zs: typing.List[float] = []
             for line in readLines:
                 values: typing.List[int] = self.__parseLine(line)
                 if len(values) > 0:
                     floats: typing.List[float] = self.__convertValues(values)
-                    self.dataSheet.write_number(row, colOffset + self.Col.X.value, floats[0])
-                    self.dataSheet.write_number(row, colOffset + self.Col.Y.value, floats[1])
-                    self.dataSheet.write_number(row, colOffset + self.Col.Z.value, floats[2])
+                    x: float = floats[0]
+                    y: float = floats[1]
+                    z: float = floats[2]
+                    xs.append(x)
+                    ys.append(y)
+                    zs.append(z)
+                    sheet.write_number(row, self.Col.X.value, x)
+                    sheet.write_number(row, self.Col.Y.value, y)
+                    sheet.write_number(row, self.Col.Z.value, z)
                     row += 1
+            aveX = mean(xs)
+            aveY = mean(ys)
+            aveZ = mean(zs)
+            stdevX = stdev(xs)
+            stdevY = stdev(ys)
+            stdevZ = stdev(zs)
+            sheet.write_number(self.Row.Ave.value, self.Col.X.value, aveX)
+            sheet.write_number(self.Row.Ave.value, self.Col.Y.value, aveY)
+            sheet.write_number(self.Row.Ave.value, self.Col.Z.value, aveZ)
+            sheet.write_number(self.Row.Stdev.value, self.Col.X.value, stdevX)
+            sheet.write_number(self.Row.Stdev.value, self.Col.Y.value, stdevY)
+            sheet.write_number(self.Row.Stdev.value, self.Col.Z.value, stdevZ)
+            summaryRow = self.SummaryRow.Data.value + self.count
+            self.summary.write(summaryRow, self.SummaryCol.Name.value, name)
+            self.summary.write_number(summaryRow, self.SummaryCol.AveX.value, aveX)
+            self.summary.write_number(summaryRow, self.SummaryCol.AveY.value, aveY)
+            self.summary.write_number(summaryRow, self.SummaryCol.AveZ.value, aveZ)
+            self.summary.write_number(summaryRow, self.SummaryCol.StdevX.value, stdevX)
+            self.summary.write_number(summaryRow, self.SummaryCol.StdevY.value, stdevY)
+            self.summary.write_number(summaryRow, self.SummaryCol.StdevZ.value, stdevZ)
             self.count += 1
             
     def finalize(self):
