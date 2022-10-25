@@ -32,39 +32,39 @@ class gyro:
         __EXTENSION: str = '.xlsx'
         __DATA_SHEET: str = 'data'
         
-        self.wb: xlsxwriter.Workbook = xlsxwriter.Workbook(self.__FILE_NAME + self.__EXTENSION)
-        self.dataSheet: xlsxwriter.Workbook.worksheet_class = self.wb.add_worksheet(self.__DATA_SHEET)
+        self.wb: xlsxwriter.Workbook = xlsxwriter.Workbook(__FILE_NAME + __EXTENSION)
+        self.dataSheet: xlsxwriter.Workbook.worksheet_class = self.wb.add_worksheet(__DATA_SHEET)
         self.count: int = 0
         
     def __parseLine(self, line: str) -> typing.List[int]:
         __START_PATTERN: str = 'gyro: (x,y,z)'
         values: typing.List[int] = []
         hits: typing.List[str] = []
-        if line.find(__START_PATTERN) > 0:
+        if line.find(__START_PATTERN) < 0:
             # https://stackoverflow.com/questions/12231193/python-split-string-by-start-and-end-characters
             pattern = re.compile(r'\(([^)]+)\)')
             hits = pattern.findall(line)
-            if len(hits) is 1:
-                hits = hits.split(',')
+            if len(hits) == 1:
+                hits = hits[0].split(',')
                 # Remove empty strings.
                 hits = [i for i in hits if i]
                 # Strip each member of leading/trailing whitespace.
                 hits = [x.strip() for x in hits]
                 values = [int(x, 16) for x in hits]
-                values = [x if x < 2^15 else x - 2^16 for x in values]
+                values = [x if (x < 2**15) else (x - 2**16) for x in values]
         return values
     
     def __convertValues(self, values: typing.List[int]) -> typing.List[float]:
-        floats: typing.List[float] = [(500.0 * x) / 2^16 for x in values]
+        floats: typing.List[float] = [(500.0 * float(x)) / 2**16 for x in values]
         return floats
         
     def process(self):
-        __FILE_SEARCH_PATTERN: str = '*.txt'
+        __FILE_SEARCH_PATTERN: str = '*.log'
         __FILE_REPLACE_PATTERN: str = __FILE_SEARCH_PATTERN.replace('*', '')
         
-        for fileName in glob.glob(self.__FILE_SEARCH_PATTERN):
+        for fileName in glob.glob(__FILE_SEARCH_PATTERN):
             print('processing {0}...'.format(fileName))
-            name: str = fileName.replace(self.__FILE_REPLACE_PATTERN, '')
+            name: str = fileName.replace(__FILE_REPLACE_PATTERN, '')
             fullPath: str = os.path.join(os.getcwd(), fileName)
             with open(fullPath, 'r') as file:
                 readLines = file.readlines()
@@ -78,8 +78,8 @@ class gyro:
                 if len(values) > 0:
                     floats: typing.List[float] = self.__convertValues(values)
                     self.dataSheet.write_number(row, colOffset + self.Col.X.value, floats[0])
-                    self.dataSheet.write_number(row, colOffset + self.Col.Y.value, floats[0])
-                    self.dataSheet.write_number(row, colOffset + self.Col.Z.value, floats[0])
+                    self.dataSheet.write_number(row, colOffset + self.Col.Y.value, floats[1])
+                    self.dataSheet.write_number(row, colOffset + self.Col.Z.value, floats[2])
                     row += 1
             self.count += 1
             
